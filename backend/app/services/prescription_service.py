@@ -25,8 +25,9 @@ from app.services.whatsapp_service import WhatsAppService
 
 
 class PrescriptionService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str):
         self.db = db
+        self.shop_key = shop_key
         self.repo = PrescriptionRepository(db)
         self.customer_repo = CustomerRepository(db)
         self.vendor_repo = VendorRepository(db)
@@ -63,7 +64,7 @@ class PrescriptionService:
         )
 
     def _get_prescription_or_404(self, prescription_id: int) -> Prescription:
-        prescription = self.repo.get_by_id(prescription_id)
+        prescription = self.repo.get_by_id(prescription_id, shop_key=self.shop_key)
         if not prescription:
             raise AppException(status_code=404, code="prescription_not_found", message="Prescription not found")
         return prescription
@@ -79,6 +80,7 @@ class PrescriptionService:
         items, total = self.repo.list(
             page=page,
             page_size=page_size,
+            shop_key=self.shop_key,
             customer_pk=customer_pk,
             customer_business_id=customer_business_id,
             contact_no=contact_no,
@@ -91,9 +93,9 @@ class PrescriptionService:
         )
 
     def list_by_customer(self, customer_pk: int) -> list[PrescriptionRead]:
-        if not self.customer_repo.get_by_id(customer_pk):
+        if not self.customer_repo.get_by_id(customer_pk, shop_key=self.shop_key):
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
-        prescriptions = self.repo.list_for_customer(customer_pk)
+        prescriptions = self.repo.list_for_customer(customer_pk, shop_key=self.shop_key)
         return [self._serialize(item) for item in prescriptions]
 
     def get_prescription(self, prescription_id: int) -> PrescriptionRead:
@@ -101,7 +103,7 @@ class PrescriptionService:
         return self._serialize(prescription)
 
     def create_prescription(self, payload: PrescriptionCreate, actor: User) -> PrescriptionRead:
-        customer = self.customer_repo.get_by_id(payload.customer_id)
+        customer = self.customer_repo.get_by_id(payload.customer_id, shop_key=self.shop_key)
         if not customer:
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
 

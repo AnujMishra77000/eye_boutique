@@ -32,8 +32,9 @@ class RangeWindow:
 
 
 class AnalyticsService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str):
         self.db = db
+        self.shop_key = shop_key
 
     @staticmethod
     def _day_bounds(target_date: date) -> tuple[datetime, datetime]:
@@ -64,27 +65,56 @@ class AnalyticsService:
         return RangeWindow(start=start, end=end, labels=labels)
 
     def _confirmed_bill_query(self):
-        return self.db.query(Bill).filter(
-            Bill.is_deleted.is_(False),
-            Bill.payment_status.in_([PaymentStatus.PAID, PaymentStatus.PARTIAL]),
+        return (
+            self.db.query(Bill)
+            .join(Customer, Customer.id == Bill.customer_id)
+            .filter(
+                Bill.is_deleted.is_(False),
+                Customer.is_deleted.is_(False),
+                Customer.shop_key == self.shop_key,
+                Bill.payment_status.in_([PaymentStatus.PAID, PaymentStatus.PARTIAL]),
+            )
         )
 
     def get_dashboard_summary(self, *, include_revenue: bool = True) -> DashboardSummaryResponse:
         now = datetime.now(UTC)
         today_start, today_end = self._day_bounds(now.date())
 
-        total_customers = self.db.query(Customer.id).filter(Customer.is_deleted.is_(False)).count()
+        total_customers = (
+            self.db.query(Customer.id).filter(Customer.is_deleted.is_(False), Customer.shop_key == self.shop_key).count()
+        )
         today_customers = (
             self.db.query(Customer.id)
-            .filter(Customer.is_deleted.is_(False), Customer.created_at >= today_start, Customer.created_at < today_end)
+            .filter(
+                Customer.is_deleted.is_(False),
+                Customer.shop_key == self.shop_key,
+                Customer.created_at >= today_start,
+                Customer.created_at < today_end,
+            )
             .count()
         )
 
-        total_prescriptions = self.db.query(Prescription.id).filter(Prescription.is_deleted.is_(False)).count()
+        total_prescriptions = (
+            self.db.query(Prescription.id)
+            .join(Customer, Customer.id == Prescription.customer_id)
+            .filter(
+                Prescription.is_deleted.is_(False),
+                Customer.is_deleted.is_(False),
+                Customer.shop_key == self.shop_key,
+            )
+            .count()
+        )
 
         bills_generated_today = (
             self.db.query(Bill.id)
-            .filter(Bill.is_deleted.is_(False), Bill.created_at >= today_start, Bill.created_at < today_end)
+            .join(Customer, Customer.id == Bill.customer_id)
+            .filter(
+                Bill.is_deleted.is_(False),
+                Customer.is_deleted.is_(False),
+                Customer.shop_key == self.shop_key,
+                Bill.created_at >= today_start,
+                Bill.created_at < today_end,
+            )
             .count()
         )
 
@@ -102,6 +132,7 @@ class AnalyticsService:
             self.db.query(Campaign.id)
             .filter(
                 Campaign.is_deleted.is_(False),
+                Campaign.shop_key == self.shop_key,
                 Campaign.status == CampaignStatus.SCHEDULED,
             )
             .count()
@@ -109,7 +140,11 @@ class AnalyticsService:
 
         failed_whatsapp_jobs = (
             self.db.query(WhatsAppLog.id)
-            .filter(WhatsAppLog.status == WhatsAppStatus.FAILED)
+            .join(Customer, Customer.id == WhatsAppLog.customer_id)
+            .filter(
+                WhatsAppLog.status == WhatsAppStatus.FAILED,
+                Customer.shop_key == self.shop_key,
+            )
             .count()
         )
 

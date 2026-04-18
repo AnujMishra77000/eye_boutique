@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "@/layouts/AppShell";
 import { AuthLayout } from "@/layouts/AuthLayout";
 import { ProtectedRoute } from "@/routes/ProtectedRoute";
+import { ShopRoute } from "@/routes/ShopRoute";
 
 const AnalyticsPage = lazy(() =>
   import("@/pages/analytics/AnalyticsPage").then((module) => ({ default: module.AnalyticsPage }))
@@ -11,6 +12,11 @@ const AnalyticsPage = lazy(() =>
 const AdminRegisterPage = lazy(() =>
   import("@/pages/auth/AdminRegisterPage").then((module) => ({ default: module.AdminRegisterPage }))
 );
+const ShopEntryPage = lazy(() => import("@/pages/auth/ShopEntryPage").then((module) => ({ default: module.ShopEntryPage })));
+const ShopResolvePage = lazy(() =>
+  import("@/pages/auth/ShopResolvePage").then((module) => ({ default: module.ShopResolvePage }))
+);
+const LaunchPage = lazy(() => import("@/pages/auth/LaunchPage").then((module) => ({ default: module.LaunchPage })));
 const LandingPage = lazy(() => import("@/pages/auth/LandingPage").then((module) => ({ default: module.LandingPage })));
 const LoginPage = lazy(() => import("@/pages/auth/LoginPage").then((module) => ({ default: module.LoginPage })));
 
@@ -18,12 +24,18 @@ const BillingPage = lazy(() => import("@/pages/billing/BillingPage").then((modul
 const BillingRecordsPage = lazy(() =>
   import("@/pages/billing/BillingRecordsPage").then((module) => ({ default: module.BillingRecordsPage }))
 );
+const BillingDetailPage = lazy(() =>
+  import("@/pages/billing/BillingDetailPage").then((module) => ({ default: module.BillingDetailPage }))
+);
 const BillingEditPage = lazy(() =>
   import("@/pages/billing/BillingEditPage").then((module) => ({ default: module.BillingEditPage }))
 );
 
 const CampaignsPage = lazy(() =>
   import("@/pages/campaigns/CampaignsPage").then((module) => ({ default: module.CampaignsPage }))
+);
+const SharedChatPage = lazy(() =>
+  import("@/pages/chat/SharedChatPage").then((module) => ({ default: module.SharedChatPage }))
 );
 
 const CustomersPage = lazy(() =>
@@ -63,9 +75,12 @@ function renderLazyPage(element: ReactNode) {
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={renderLazyPage(<LandingPage />)} />
+      <Route path="/" element={renderLazyPage(<LaunchPage />)} />
+      <Route path="/landing" element={renderLazyPage(<ShopRoute><LandingPage /></ShopRoute>)} />
+      <Route path="/shop-entry" element={renderLazyPage(<ShopEntryPage />)} />
+      <Route path="/shop/:shopKey" element={renderLazyPage(<ShopResolvePage />)} />
 
-      <Route element={<AuthLayout />}>
+      <Route element={<ShopRoute><AuthLayout /></ShopRoute>}>
         <Route path="/login" element={<Navigate to="/login/admin" replace />} />
         <Route path="/login/admin" element={renderLazyPage(<LoginPage mode="admin" />)} />
         <Route path="/login/staff" element={renderLazyPage(<LoginPage mode="staff" />)} />
@@ -73,11 +88,7 @@ export function AppRouter() {
       </Route>
 
       <Route
-        element={
-          <ProtectedRoute>
-            <AppShell />
-          </ProtectedRoute>
-        }
+        element={<ShopRoute><ProtectedRoute><AppShell /></ProtectedRoute></ShopRoute>}
       >
         <Route path="/dashboard" element={renderLazyPage(<DashboardPage />)} />
 
@@ -91,12 +102,14 @@ export function AppRouter() {
 
         <Route path="/billing" element={renderLazyPage(<BillingPage />)} />
         <Route path="/billing/records" element={renderLazyPage(<BillingRecordsPage />)} />
+        <Route path="/billing/view/:billId" element={renderLazyPage(<BillingDetailPage />)} />
         <Route
           path="/billing/edit/:billId"
-          element={<ProtectedRoute allowedRoles={["admin"]}>{renderLazyPage(<BillingEditPage />)}</ProtectedRoute>}
+          element={<ProtectedRoute allowedRoles={["admin", "staff"]}>{renderLazyPage(<BillingEditPage />)}</ProtectedRoute>}
         />
 
         <Route path="/campaigns" element={renderLazyPage(<CampaignsPage />)} />
+        <Route path="/shared-chat" element={renderLazyPage(<SharedChatPage />)} />
 
         <Route
           path="/analytics"

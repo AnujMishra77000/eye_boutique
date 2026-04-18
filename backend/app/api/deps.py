@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.shops import resolve_shop_key
 from app.core.security import TokenDecodeError, decode_jwt_token
 from app.db.session import get_db
 from app.models.enums import UserRole
@@ -14,6 +15,13 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.api_v1_prefix}/auth/login")
+
+
+def get_shop_key(x_shop_key: str | None = Header(default=None, alias="X-Shop-Key")) -> str:
+    try:
+        return resolve_shop_key(x_shop_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid shop context") from exc
 
 
 def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)) -> User:
@@ -44,9 +52,13 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
 def require_roles(*roles: UserRole) -> Callable[[User], User]:
     role_values = {role.value for role in roles}
 
-    def _dependency(current_user: User = Depends(get_current_user)) -> User:
+    def _dependency(current_user: User = Depends(get_current_user), shop_key: str = Depends(get_shop_key)) -> User:
         if current_user.role.value not in role_values:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
+
+        if current_user.shop_key != shop_key:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid shop access")
+
         return current_user
 
     return _dependency

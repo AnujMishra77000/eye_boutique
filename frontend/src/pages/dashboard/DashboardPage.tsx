@@ -8,6 +8,8 @@ import { getDashboardSummary, getRevenueTimeseries } from "@/features/analytics/
 import { getErrorMessage } from "@/lib/errors";
 import type { RevenueRange } from "@/types/analytics";
 
+const GRAPH_PURPLE = "#6b2fa3";
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -137,27 +139,32 @@ export function DashboardPage() {
               <AreaChart data={revenuePoints}>
                 <defs>
                   <linearGradient id="dashboardRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#4edfff" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#4edfff" stopOpacity={0.05} />
+                    <stop offset="0%" stopColor={GRAPH_PURPLE} stopOpacity={0.62} />
+                    <stop offset="100%" stopColor={GRAPH_PURPLE} stopOpacity={0.07} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="4 4" stroke="#274261" />
-                <XAxis dataKey="label" stroke="#c7d8f4" />
-                <YAxis stroke="#c7d8f4" />
+                <CartesianGrid strokeDasharray="4 4" stroke="rgba(107, 47, 163, 0.24)" />
+                <XAxis dataKey="label" stroke={GRAPH_PURPLE} />
+                <YAxis stroke={GRAPH_PURPLE} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: "#251747",
-                    border: "1px solid rgba(78, 223, 255, 0.45)",
+                    backgroundColor: "#ffeaf6",
+                    border: "1px solid rgba(107, 47, 163, 0.45)",
                     borderRadius: 12,
-                    color: "#f8fbff"
+                    color: GRAPH_PURPLE
                   }}
+                  itemStyle={{ color: GRAPH_PURPLE }}
+                  labelStyle={{ color: GRAPH_PURPLE }}
+                  formatter={(value) => formatCurrency(Number(value))}
                 />
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="#7ce8ff"
+                  stroke={GRAPH_PURPLE}
                   strokeWidth={2}
                   fill="url(#dashboardRevenueGradient)"
+                  dot={{ r: 2, fill: GRAPH_PURPLE, stroke: GRAPH_PURPLE }}
+                  activeDot={{ r: 4, fill: GRAPH_PURPLE, stroke: GRAPH_PURPLE }}
                 />
               </AreaChart>
             </ResponsiveContainer>

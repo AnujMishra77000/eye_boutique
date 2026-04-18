@@ -17,6 +17,7 @@ class BillRepository:
         self,
         page: int,
         page_size: int,
+        shop_key: str,
         search: str | None = None,
         customer_pk: int | None = None,
     ) -> tuple[list[Bill], int]:
@@ -24,7 +25,7 @@ class BillRepository:
             self.db.query(Bill)
             .join(Customer, Customer.id == Bill.customer_id)
             .options(joinedload(Bill.customer))
-            .filter(Bill.is_deleted.is_(False), Customer.is_deleted.is_(False))
+            .filter(Bill.is_deleted.is_(False), Customer.is_deleted.is_(False), Customer.shop_key == shop_key)
         )
 
         if customer_pk is not None:
@@ -54,21 +55,25 @@ class BillRepository:
         )
         return items, total
 
-    def get_by_id(self, bill_id: int, include_deleted: bool = False) -> Bill | None:
-        query = self.db.query(Bill).options(joinedload(Bill.customer))
+    def get_by_id(self, bill_id: int, shop_key: str, include_deleted: bool = False) -> Bill | None:
+        query = self.db.query(Bill).join(Customer, Customer.id == Bill.customer_id).options(joinedload(Bill.customer))
         if not include_deleted:
             query = query.filter(Bill.is_deleted.is_(False))
-        return query.filter(Bill.id == bill_id).first()
+        return query.filter(Bill.id == bill_id, Customer.shop_key == shop_key, Customer.is_deleted.is_(False)).first()
 
-    def get_by_bill_number(self, bill_number: str) -> Bill | None:
-        return self.db.query(Bill).filter(Bill.bill_number == bill_number).first()
+    def get_by_bill_number(self, bill_number: str, shop_key: str | None = None) -> Bill | None:
+        query = self.db.query(Bill)
+        if shop_key is not None:
+            query = query.join(Customer, Customer.id == Bill.customer_id).filter(Customer.shop_key == shop_key)
+        return query.filter(Bill.bill_number == bill_number).first()
 
-    def count_created_for_day(self, target_date: date) -> int:
+    def count_created_for_day(self, target_date: date, shop_key: str) -> int:
         start = datetime.combine(target_date, time.min, tzinfo=UTC)
         end = start + timedelta(days=1)
         return (
             self.db.query(Bill.id)
-            .filter(Bill.created_at >= start, Bill.created_at < end)
+            .join(Customer, Customer.id == Bill.customer_id)
+            .filter(Bill.created_at >= start, Bill.created_at < end, Customer.shop_key == shop_key)
             .count()
         )
 

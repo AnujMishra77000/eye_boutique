@@ -21,8 +21,9 @@ from app.services.audit_service import AuditService
 
 
 class StaffService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str):
         self.db = db
+        self.shop_key = shop_key
         self.user_repo = UserRepository(db)
         self.audit_service = AuditService(db)
 
@@ -36,6 +37,7 @@ class StaffService:
         items, total = self.user_repo.list_staff(
             page=page,
             page_size=page_size,
+            shop_key=self.shop_key,
             search=search,
             is_active=is_active,
         )
@@ -54,7 +56,7 @@ class StaffService:
         ip_address: str | None,
         user_agent: str | None,
     ) -> StaffRead:
-        if self.user_repo.get_by_email(payload.email):
+        if self.user_repo.get_by_email(payload.email, shop_key=self.shop_key):
             raise AppException(status_code=409, code="email_exists", message="Email is already registered")
 
         try:
@@ -63,6 +65,7 @@ class StaffService:
                 full_name=payload.full_name,
                 password_hash=get_password_hash(payload.password),
                 role=UserRole.STAFF,
+                shop_key=self.shop_key,
                 is_active=True,
             )
             self.audit_service.log(
@@ -92,7 +95,7 @@ class StaffService:
         ip_address: str | None,
         user_agent: str | None,
     ) -> MessageResponse:
-        staff = self.user_repo.get_staff_by_id(staff_user_id)
+        staff = self.user_repo.get_staff_by_id(staff_user_id, shop_key=self.shop_key)
         if not staff:
             raise AppException(status_code=404, code="staff_not_found", message="Staff user not found")
 
@@ -131,6 +134,7 @@ class StaffService:
             .filter(
                 AuditLog.action == "auth.login",
                 User.role == UserRole.STAFF,
+                User.shop_key == self.shop_key,
             )
         )
 

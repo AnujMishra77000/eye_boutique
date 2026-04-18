@@ -67,7 +67,7 @@ export function AdminRegisterPage() {
             type="email"
             {...register("email")}
             className="w-full rounded-lg border border-pink-300/30 bg-matte-800 px-3 py-2.5 text-sm text-slate-100 outline-none transition focus:border-pink-200"
-            placeholder="admin@aadarsh-eye.com"
+            placeholder="admin@shop.com"
           />
           {errors.email && <p className="mt-1 text-xs text-rose-300">{errors.email.message}</p>}
         </div>

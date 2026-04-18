@@ -35,11 +35,17 @@ class AuthService:
         self.refresh_repo = RefreshTokenRepository(db)
         self.audit_service = AuditService(db)
 
-    def register_admin(self, payload: AdminRegisterRequest, ip_address: str | None, user_agent: str | None) -> User:
+    def register_admin(
+        self,
+        payload: AdminRegisterRequest,
+        ip_address: str | None,
+        user_agent: str | None,
+        shop_key: str,
+    ) -> User:
         if payload.master_password != settings.admin_master_password:
             raise AppException(status_code=403, code="invalid_master_password", message="Invalid admin master password")
 
-        if self.user_repo.get_by_email(payload.email):
+        if self.user_repo.get_by_email(payload.email, shop_key=shop_key):
             raise AppException(status_code=409, code="email_exists", message="Email is already registered")
 
         try:
@@ -48,6 +54,7 @@ class AuthService:
                 full_name=payload.full_name,
                 password_hash=get_password_hash(payload.password),
                 role=UserRole.ADMIN,
+                shop_key=shop_key,
                 is_active=True,
             )
             self.audit_service.log(
@@ -66,8 +73,14 @@ class AuthService:
             self.db.rollback()
             raise AppException(status_code=409, code="integrity_error", message="Unable to create admin user") from exc
 
-    def login(self, payload: LoginRequest, ip_address: str | None, user_agent: str | None) -> TokenPairResponse:
-        user = self.user_repo.get_by_email(payload.email)
+    def login(
+        self,
+        payload: LoginRequest,
+        ip_address: str | None,
+        user_agent: str | None,
+        shop_key: str,
+    ) -> TokenPairResponse:
+        user = self.user_repo.get_by_email(payload.email, shop_key=shop_key)
         if not user or not verify_password(payload.password, user.password_hash):
             raise AppException(status_code=401, code="invalid_credentials", message="Invalid email or password")
         if not user.is_active:
@@ -109,6 +122,7 @@ class AuthService:
         payload: RefreshTokenRequest,
         ip_address: str | None,
         user_agent: str | None,
+        shop_key: str,
     ) -> TokenPairResponse:
         try:
             decoded = decode_jwt_token(payload.refresh_token)
@@ -130,6 +144,8 @@ class AuthService:
         user = self.user_repo.get_by_id(token_record.user_id)
         if not user or not user.is_active:
             raise AppException(status_code=401, code="user_invalid", message="User no longer active")
+        if user.shop_key != shop_key:
+            raise AppException(status_code=401, code="refresh_shop_mismatch", message="Invalid refresh context")
 
         if str(user.id) != str(decoded.get("sub")):
             raise AppException(status_code=401, code="refresh_subject_mismatch", message="Refresh token mismatch")
@@ -164,7 +180,13 @@ class AuthService:
 
         return TokenPairResponse(access_token=new_access_token, refresh_token=new_refresh_token)
 
-    def logout(self, payload: LogoutRequest, ip_address: str | None, user_agent: str | None) -> MessageResponse:
+    def logout(
+        self,
+        payload: LogoutRequest,
+        ip_address: str | None,
+        user_agent: str | None,
+        shop_key: str,
+    ) -> MessageResponse:
         try:
             decoded = decode_jwt_token(payload.refresh_token)
         except TokenDecodeError as exc:
@@ -177,6 +199,10 @@ class AuthService:
         token_record = self.refresh_repo.get_by_hash(token_hash)
 
         if token_record and token_record.revoked_at is None:
+            user = self.user_repo.get_by_id(token_record.user_id)
+            if not user or user.shop_key != shop_key:
+                raise AppException(status_code=401, code="logout_shop_mismatch", message="Invalid logout context")
+
             now = datetime.now(UTC)
             self.refresh_repo.revoke(token_record, revoked_at=now)
             self.audit_service.log(

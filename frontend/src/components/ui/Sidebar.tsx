@@ -3,6 +3,7 @@ import {
   FileText,
   LayoutDashboard,
   Megaphone,
+  MessageSquare,
   Receipt,
   UserCog,
   Users,
@@ -12,6 +13,7 @@ import {
 import { NavLink } from "react-router-dom";
 
 import logoMark from "@/assets/logo-mark.svg";
+import { useActiveShop } from "@/features/shops/useActiveShop";
 import { cn } from "@/lib/cn";
 import type { UserRole } from "@/types/auth";
 
@@ -33,12 +35,14 @@ const navItems: NavItem[] = [
   { to: "/prescriptions", label: "Prescriptions", shortLabel: "Rx", icon: FileText },
   { to: "/vendors", label: "Vendors", shortLabel: "Vendor", icon: UserSquare2 },
   { to: "/billing", label: "Billing", shortLabel: "Bill", icon: Receipt },
+  { to: "/shared-chat", label: "Shared Chat", shortLabel: "Chat", icon: MessageSquare },
   { to: "/campaigns", label: "Campaigns", shortLabel: "Camp", icon: Megaphone },
   { to: "/analytics", label: "Analytics", shortLabel: "Chart", icon: BarChart3, roles: ["admin"] },
   { to: "/staff-management", label: "Staff", shortLabel: "Staff", icon: UserCog, roles: ["admin"] }
 ];
 
 export function Sidebar({ role }: SidebarProps) {
+  const activeShop = useActiveShop();
   const effectiveRole = role ?? "staff";
   const visibleNavItems = navItems.filter((item) => item.roles === undefined || item.roles.includes(effectiveRole));
 
@@ -46,7 +50,7 @@ export function Sidebar({ role }: SidebarProps) {
     <>
       <aside className="fixed bottom-0 left-0 top-0 z-30 hidden w-16 border-r border-pink-300/20 bg-matte-900/85 px-2 py-3 shadow-panel backdrop-blur lg:flex lg:flex-col lg:items-center">
         <div className="mb-4 rounded-lg border border-pink-300/35 bg-matte-800/75 p-1.5">
-          <img alt="Aadarsh Eye Boutique" src={logoMark} className="h-7 w-7" />
+          <img alt={activeShop?.name ?? "Eye Boutique"} src={logoMark} className="h-7 w-7" />
         </div>
 
         <nav className="flex w-full flex-1 flex-col items-center gap-2 overflow-y-auto">

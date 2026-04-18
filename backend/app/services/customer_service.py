@@ -24,14 +24,15 @@ from app.services.email_service import EmailService
 
 
 class CustomerService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str):
         self.db = db
+        self.shop_key = shop_key
         self.repo = CustomerRepository(db)
         self.audit_service = AuditService(db)
         self.email_service = EmailService()
 
     def list_customers(self, page: int, page_size: int, search: str | None) -> CustomerListResponse:
-        items, total = self.repo.list(page=page, page_size=page_size, search=search)
+        items, total = self.repo.list(page=page, page_size=page_size, shop_key=self.shop_key, search=search)
         return CustomerListResponse(
             items=[CustomerRead.model_validate(item) for item in items],
             total=total,
@@ -49,6 +50,7 @@ class CustomerService:
 
     def create_customer(self, payload: CustomerCreate, actor: User) -> CustomerRead:
         customer = Customer(
+            shop_key=self.shop_key,
             customer_id=self._generate_customer_code(),
             name=payload.name,
             age=payload.age,
@@ -89,7 +91,7 @@ class CustomerService:
         return CustomerRead.model_validate(customer)
 
     def get_customer(self, customer_pk: int) -> CustomerDetailRead:
-        customer = self.repo.get_detail(customer_pk)
+        customer = self.repo.get_detail(customer_pk, shop_key=self.shop_key)
         if not customer:
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
 
@@ -128,7 +130,7 @@ class CustomerService:
         )
 
     def update_customer(self, customer_pk: int, payload: CustomerUpdate, actor: User) -> CustomerRead:
-        customer = self.repo.get_by_id(customer_pk)
+        customer = self.repo.get_by_id(customer_pk, shop_key=self.shop_key)
         if not customer:
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
 
@@ -166,7 +168,7 @@ class CustomerService:
         return CustomerRead.model_validate(customer)
 
     def delete_customer(self, customer_pk: int, actor: User) -> None:
-        customer = self.repo.get_by_id(customer_pk)
+        customer = self.repo.get_by_id(customer_pk, shop_key=self.shop_key)
         if not customer:
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
 

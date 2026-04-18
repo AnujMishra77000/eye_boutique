@@ -14,15 +14,17 @@ class UserRepository:
     def get_by_id(self, user_id: int) -> User | None:
         return self.db.query(User).filter(User.id == user_id).first()
 
-    def get_staff_by_id(self, user_id: int) -> User | None:
-        return (
-            self.db.query(User)
-            .filter(User.id == user_id, User.role == UserRole.STAFF)
-            .first()
-        )
+    def get_staff_by_id(self, user_id: int, shop_key: str | None = None) -> User | None:
+        query = self.db.query(User).filter(User.id == user_id, User.role == UserRole.STAFF)
+        if shop_key is not None:
+            query = query.filter(User.shop_key == shop_key)
+        return query.first()
 
-    def get_by_email(self, email: str) -> User | None:
-        return self.db.query(User).filter(User.email == email.lower()).first()
+    def get_by_email(self, email: str, shop_key: str | None = None) -> User | None:
+        query = self.db.query(User).filter(User.email == email.lower())
+        if shop_key is not None:
+            query = query.filter(User.shop_key == shop_key)
+        return query.first()
 
     def exists_admin(self) -> bool:
         return self.db.query(User.id).filter(User.role == UserRole.ADMIN).first() is not None
@@ -31,10 +33,11 @@ class UserRepository:
         self,
         page: int,
         page_size: int,
+        shop_key: str,
         search: str | None = None,
         is_active: bool | None = None,
     ) -> tuple[list[User], int]:
-        query = self.db.query(User).filter(User.role == UserRole.STAFF)
+        query = self.db.query(User).filter(User.role == UserRole.STAFF, User.shop_key == shop_key)
 
         if is_active is not None:
             query = query.filter(User.is_active.is_(is_active))
@@ -57,12 +60,21 @@ class UserRepository:
         )
         return items, total
 
-    def create(self, email: str, full_name: str | None, password_hash: str, role: UserRole, is_active: bool = True) -> User:
+    def create(
+        self,
+        email: str,
+        full_name: str | None,
+        password_hash: str,
+        role: UserRole,
+        shop_key: str,
+        is_active: bool = True,
+    ) -> User:
         user = User(
             email=email.lower(),
             full_name=full_name,
             password_hash=password_hash,
             role=role,
+            shop_key=shop_key,
             is_active=is_active,
         )
         self.db.add(user)

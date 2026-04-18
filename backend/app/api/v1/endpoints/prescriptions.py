@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import get_shop_key, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -30,10 +30,11 @@ def list_prescriptions(
     customer_business_id: str | None = Query(default=None),
     contact_no: str | None = Query(default=None),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionListResponse:
     _ = current_user
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.list_prescriptions(
         page=page,
         page_size=page_size,
@@ -47,9 +48,10 @@ def list_prescriptions(
 def create_prescription(
     payload: PrescriptionCreate,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionRead:
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.create_prescription(payload=payload, actor=current_user)
 
 
@@ -57,10 +59,11 @@ def create_prescription(
 def list_customer_prescriptions(
     customer_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> list[PrescriptionRead]:
     _ = current_user
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.list_by_customer(customer_pk=customer_id)
 
 
@@ -68,10 +71,11 @@ def list_customer_prescriptions(
 def get_prescription(
     prescription_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionRead:
     _ = current_user
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.get_prescription(prescription_id=prescription_id)
 
 
@@ -80,9 +84,10 @@ def update_prescription(
     prescription_id: int,
     payload: PrescriptionUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    shop_key: str = Depends(get_shop_key),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionRead:
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.update_prescription(prescription_id=prescription_id, payload=payload, actor=current_user)
 
 
@@ -90,9 +95,10 @@ def update_prescription(
 def delete_prescription(
     prescription_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> MessageResponse:
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     service.delete_prescription(prescription_id=prescription_id, actor=current_user)
     return MessageResponse(message="Prescription deleted successfully")
 
@@ -101,9 +107,10 @@ def delete_prescription(
 def generate_prescription_pdf(
     prescription_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionPdfResponse:
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.generate_pdf(prescription_id=prescription_id, actor=current_user)
 
 
@@ -112,7 +119,8 @@ def send_prescription_to_vendor(
     prescription_id: int,
     payload: PrescriptionSendVendorRequest,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> PrescriptionSendVendorResponse:
-    service = PrescriptionService(db)
+    service = PrescriptionService(db, shop_key=shop_key)
     return service.send_to_vendor(prescription_id=prescription_id, payload=payload, actor=current_user)

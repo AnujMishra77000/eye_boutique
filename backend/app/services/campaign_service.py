@@ -30,8 +30,9 @@ logger = structlog.get_logger(__name__)
 
 
 class CampaignService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str | None = None):
         self.db = db
+        self.shop_key = shop_key
         self.repo = CampaignRepository(db)
         self.log_repo = CampaignLogRepository(db)
         self.customer_repo = CustomerRepository(db)
@@ -52,6 +53,11 @@ class CampaignService:
     def _serialize_log(log_row: CampaignLog) -> CampaignLogRead:
         return CampaignLogRead.model_validate(log_row)
 
+    def _require_shop_key(self) -> str:
+        if not self.shop_key:
+            raise AppException(status_code=400, code="missing_shop_context", message="Missing shop context")
+        return self.shop_key
+
     def list_campaigns(
         self,
         *,
@@ -60,7 +66,8 @@ class CampaignService:
         status: CampaignStatus | None,
         search: str | None,
     ) -> CampaignListResponse:
-        items, total = self.repo.list(page=page, page_size=page_size, status=status, search=search)
+        shop_key = self._require_shop_key()
+        items, total = self.repo.list(page=page, page_size=page_size, shop_key=shop_key, status=status, search=search)
         return CampaignListResponse(
             items=[self._serialize_campaign(item) for item in items],
             total=total,
@@ -69,13 +76,15 @@ class CampaignService:
         )
 
     def get_campaign(self, campaign_id: int) -> CampaignRead:
-        campaign = self.repo.get_by_id(campaign_id)
+        campaign = self.repo.get_by_id(campaign_id, shop_key=self._require_shop_key())
         if not campaign:
             raise AppException(status_code=404, code="campaign_not_found", message="Campaign not found")
         return self._serialize_campaign(campaign)
 
     def create_campaign(self, payload: CampaignCreate, actor: User) -> CampaignRead:
+        shop_key = self._require_shop_key()
         campaign = Campaign(
+            shop_key=shop_key,
             title=payload.title.strip(),
             message_body=payload.message_body.strip(),
             scheduled_at=self._to_utc(payload.scheduled_at),
@@ -109,7 +118,7 @@ class CampaignService:
         return self._serialize_campaign(campaign)
 
     def update_campaign(self, campaign_id: int, payload: CampaignUpdate, actor: User) -> CampaignRead:
-        campaign = self.repo.get_by_id(campaign_id)
+        campaign = self.repo.get_by_id(campaign_id, shop_key=self._require_shop_key())
         if not campaign:
             raise AppException(status_code=404, code="campaign_not_found", message="Campaign not found")
 
@@ -163,7 +172,7 @@ class CampaignService:
         return self._serialize_campaign(campaign)
 
     def delete_campaign(self, campaign_id: int, actor: User) -> None:
-        campaign = self.repo.get_by_id(campaign_id)
+        campaign = self.repo.get_by_id(campaign_id, shop_key=self._require_shop_key())
         if not campaign:
             raise AppException(status_code=404, code="campaign_not_found", message="Campaign not found")
 
@@ -186,7 +195,8 @@ class CampaignService:
         self.db.commit()
 
     def schedule_campaign(self, campaign_id: int, actor: User) -> CampaignScheduleResponse:
-        campaign = self.repo.get_by_id(campaign_id)
+        shop_key = self._require_shop_key()
+        campaign = self.repo.get_by_id(campaign_id, shop_key=shop_key)
         if not campaign:
             raise AppException(status_code=404, code="campaign_not_found", message="Campaign not found")
 
@@ -204,7 +214,7 @@ class CampaignService:
                 message="Completed campaign cannot be scheduled again",
             )
 
-        target_count = self.customer_repo.count_whatsapp_eligible()
+        target_count = self.customer_repo.count_whatsapp_eligible(shop_key=shop_key)
         campaign.total_customers_targeted = target_count
         campaign.total_sent = 0
         campaign.total_failed = 0
@@ -264,7 +274,7 @@ class CampaignService:
         return CampaignScheduleResponse(message="Campaign scheduled successfully", campaign=self._serialize_campaign(campaign))
 
     def list_logs(self, campaign_id: int, page: int, page_size: int) -> CampaignLogListResponse:
-        campaign = self.repo.get_by_id(campaign_id)
+        campaign = self.repo.get_by_id(campaign_id, shop_key=self._require_shop_key())
         if not campaign:
             raise AppException(status_code=404, code="campaign_not_found", message="Campaign not found")
 
@@ -294,7 +304,7 @@ class CampaignService:
         self.repo.save(campaign)
         self.db.commit()
 
-        customers = self.customer_repo.list_whatsapp_eligible()
+        customers = self.customer_repo.list_whatsapp_eligible(shop_key=campaign.shop_key)
         campaign.total_customers_targeted = len(customers)
 
         sent_count = 0

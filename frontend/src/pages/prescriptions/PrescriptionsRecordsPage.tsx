@@ -6,16 +6,8 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { searchCustomers } from "@/features/customers/api";
 import { useCurrentUser } from "@/features/auth/useCurrentUser";
-import {
-  createPrescription,
-  deletePrescription,
-  generatePrescriptionPdf,
-  listPrescriptions,
-  sendPrescriptionToVendor,
-  updatePrescription
-} from "@/features/prescriptions/api";
+import { deletePrescription, generatePrescriptionPdf, listPrescriptions, sendPrescriptionToVendor, updatePrescription } from "@/features/prescriptions/api";
 import { listVendors } from "@/features/vendors/api";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { getErrorMessage } from "@/lib/errors";
@@ -48,8 +40,7 @@ const optionalAxis = z.preprocess(
     .nullable()
 );
 
-const prescriptionFormSchema = z.object({
-  customer_id: z.coerce.number().int().positive("Select a customer"),
+const editPrescriptionSchema = z.object({
   prescription_date: z.string().min(1, "Prescription date is required"),
   right_sph: optionalDecimal,
   right_cyl: optionalDecimal,
@@ -65,10 +56,9 @@ const prescriptionFormSchema = z.object({
   notes: z.string().optional()
 });
 
-type PrescriptionFormValues = z.infer<typeof prescriptionFormSchema>;
+type EditPrescriptionFormValues = z.infer<typeof editPrescriptionSchema>;
 
-const defaultValues: PrescriptionFormValues = {
-  customer_id: 0,
+const defaultEditValues: EditPrescriptionFormValues = {
   prescription_date: "",
   right_sph: null,
   right_cyl: null,
@@ -101,26 +91,26 @@ function resolveMediaUrl(rawUrl: string): string {
 export function PrescriptionsRecordsPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-
   const currentUserQuery = useCurrentUser();
-  const canEditOrDeletePrescriptions = currentUserQuery.data?.role === "admin";
+
+  const currentRole = currentUserQuery.data?.role;
+  const canUpdatePrescriptions = currentRole === "admin" || currentRole === "staff";
+  const canDeletePrescriptions = currentRole === "admin";
 
   const [page, setPage] = useState(1);
   const [customerBusinessIdFilter, setCustomerBusinessIdFilter] = useState("");
   const [contactFilter, setContactFilter] = useState("");
-
-  const debouncedBusinessIdFilter = useDebouncedValue(customerBusinessIdFilter, 300);
-  const debouncedContactFilter = useDebouncedValue(contactFilter, 300);
-
-  const [customerLookup, setCustomerLookup] = useState("");
-  const debouncedCustomerLookup = useDebouncedValue(customerLookup, 300);
   const [prefillApplied, setPrefillApplied] = useState(false);
 
-  const [editingPrescription, setEditingPrescription] = useState<Prescription | null>(null);
+  const [viewPrescription, setViewPrescription] = useState<Prescription | null>(null);
+  const [editPrescription, setEditPrescription] = useState<Prescription | null>(null);
 
   const [vendorModalPrescription, setVendorModalPrescription] = useState<Prescription | null>(null);
   const [selectedVendorId, setSelectedVendorId] = useState<number>(0);
   const [vendorCaption, setVendorCaption] = useState("");
+
+  const debouncedBusinessIdFilter = useDebouncedValue(customerBusinessIdFilter, 300);
+  const debouncedContactFilter = useDebouncedValue(contactFilter, 300);
 
   const prescriptionsQuery = useQuery({
     queryKey: ["prescriptions", page, debouncedBusinessIdFilter, debouncedContactFilter],
@@ -133,12 +123,6 @@ export function PrescriptionsRecordsPage() {
       })
   });
 
-  const customerLookupQuery = useQuery({
-    queryKey: ["customer-lookup", debouncedCustomerLookup],
-    queryFn: () => searchCustomers(debouncedCustomerLookup, 1, 15),
-    enabled: debouncedCustomerLookup.length >= 2
-  });
-
   const activeVendorsQuery = useQuery({
     queryKey: ["vendors-active-for-prescriptions"],
     queryFn: () => listVendors({ page: 1, page_size: 100, is_active: true }),
@@ -149,53 +133,46 @@ export function PrescriptionsRecordsPage() {
     register,
     handleSubmit,
     reset,
-    setValue,
     formState: { errors }
-  } = useForm<PrescriptionFormValues>({
-    resolver: zodResolver(prescriptionFormSchema),
-    defaultValues
+  } = useForm<EditPrescriptionFormValues>({
+    resolver: zodResolver(editPrescriptionSchema),
+    defaultValues: defaultEditValues
   });
 
   useEffect(() => {
-    if (!editingPrescription) {
-      reset(defaultValues);
+    if (!editPrescription) {
+      reset(defaultEditValues);
       return;
     }
-
-    setCustomerLookup(editingPrescription.customer_business_id ?? "");
 
     reset({
-      customer_id: editingPrescription.customer_id,
-      prescription_date: editingPrescription.prescription_date,
-      right_sph: editingPrescription.right_sph,
-      right_cyl: editingPrescription.right_cyl,
-      right_axis: editingPrescription.right_axis,
-      right_vn: editingPrescription.right_vn ?? "",
-      left_sph: editingPrescription.left_sph,
-      left_cyl: editingPrescription.left_cyl,
-      left_axis: editingPrescription.left_axis,
-      left_vn: editingPrescription.left_vn ?? "",
-      fh: editingPrescription.fh ?? "",
-      add_power: editingPrescription.add_power,
-      pd: editingPrescription.pd,
-      notes: editingPrescription.notes ?? ""
+      prescription_date: editPrescription.prescription_date,
+      right_sph: editPrescription.right_sph,
+      right_cyl: editPrescription.right_cyl,
+      right_axis: editPrescription.right_axis,
+      right_vn: editPrescription.right_vn ?? "",
+      left_sph: editPrescription.left_sph,
+      left_cyl: editPrescription.left_cyl,
+      left_axis: editPrescription.left_axis,
+      left_vn: editPrescription.left_vn ?? "",
+      fh: editPrescription.fh ?? "",
+      add_power: editPrescription.add_power,
+      pd: editPrescription.pd,
+      notes: editPrescription.notes ?? ""
     });
-  }, [editingPrescription, reset]);
+  }, [editPrescription, reset]);
 
   useEffect(() => {
-    if (prefillApplied || editingPrescription !== null) {
+    if (prefillApplied) {
       return;
     }
 
-    const customerIdRaw = searchParams.get("customer_id");
     const customerQuery = (searchParams.get("customer_query") ?? "").trim();
     const contactNo = (searchParams.get("contact_no") ?? "").trim();
-
     let didApply = false;
 
     if (customerQuery.length > 0) {
       setCustomerBusinessIdFilter(customerQuery);
-      setCustomerLookup(customerQuery);
       didApply = true;
     }
 
@@ -204,45 +181,23 @@ export function PrescriptionsRecordsPage() {
       didApply = true;
     }
 
-    if (customerIdRaw) {
-      const customerId = Number(customerIdRaw);
-      if (Number.isFinite(customerId) && customerId > 0) {
-        setValue("customer_id", customerId, { shouldValidate: true, shouldDirty: true });
-        didApply = true;
-      }
-    }
-
     if (didApply) {
       setPage(1);
       const next = new URLSearchParams(searchParams);
-      next.delete("customer_id");
       next.delete("customer_query");
       next.delete("contact_no");
       setSearchParams(next, { replace: true });
       setPrefillApplied(true);
     }
-  }, [editingPrescription, prefillApplied, searchParams, setSearchParams, setValue]);
-
-  const createMutation = useMutation({
-    mutationFn: createPrescription,
-    onSuccess: () => {
-      toast.success("Prescription created");
-      queryClient.invalidateQueries({ queryKey: ["prescriptions"] });
-      setEditingPrescription(null);
-      reset(defaultValues);
-      setCustomerLookup("");
-    },
-    onError: (error) => toast.error(getErrorMessage(error))
-  });
+  }, [prefillApplied, searchParams, setSearchParams]);
 
   const updateMutation = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Partial<PrescriptionPayload> }) => updatePrescription(id, payload),
     onSuccess: () => {
       toast.success("Prescription updated");
       queryClient.invalidateQueries({ queryKey: ["prescriptions"] });
-      setEditingPrescription(null);
-      reset(defaultValues);
-      setCustomerLookup("");
+      setEditPrescription(null);
+      reset(defaultEditValues);
     },
     onError: (error) => toast.error(getErrorMessage(error))
   });
@@ -282,324 +237,339 @@ export function PrescriptionsRecordsPage() {
     return Math.max(1, Math.ceil(prescriptionsQuery.data.total / prescriptionsQuery.data.page_size));
   }, [prescriptionsQuery.data]);
 
-  const onSubmit = (values: PrescriptionFormValues) => {
-    const payload = {
-      ...values,
-      right_vn: values.right_vn || null,
-      left_vn: values.left_vn || null,
-      fh: values.fh || null,
-      notes: values.notes || null
-    };
-
-    if (editingPrescription && canEditOrDeletePrescriptions) {
-      updateMutation.mutate({ id: editingPrescription.id, payload });
+  const onSubmitEdit = (values: EditPrescriptionFormValues) => {
+    if (!editPrescription) {
       return;
     }
 
-    createMutation.mutate(payload);
+    const payload: Partial<PrescriptionPayload> = {
+      prescription_date: values.prescription_date,
+      right_sph: values.right_sph,
+      right_cyl: values.right_cyl,
+      right_axis: values.right_axis,
+      right_vn: values.right_vn || null,
+      left_sph: values.left_sph,
+      left_cyl: values.left_cyl,
+      left_axis: values.left_axis,
+      left_vn: values.left_vn || null,
+      fh: values.fh || null,
+      add_power: values.add_power,
+      pd: values.pd,
+      notes: values.notes || null
+    };
+
+    updateMutation.mutate({ id: editPrescription.id, payload });
   };
 
   return (
     <>
-      <div className="grid gap-6 xl:grid-cols-[1.7fr_1fr]">
-        <section className="order-2 rounded-2xl border border-pink-400/20 bg-matte-850/85 p-5 shadow-neon-ring">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-slate-100">Saved Prescriptions</h2>
-            <p className="text-sm text-slate-400">Latest prescriptions appear first. Search by customer code or mobile.</p>
-          </div>
+      <section className="rounded-2xl border border-pink-400/20 bg-matte-850/85 p-5 shadow-neon-ring">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold text-slate-100">Saved Prescriptions</h2>
+          <p className="text-sm text-slate-400">This page shows saved prescriptions only. Use View or Update to manage records.</p>
+        </div>
 
-          <div className="mb-4 grid gap-3 sm:grid-cols-2">
-            <input
-              value={customerBusinessIdFilter}
-              onChange={(event) => {
-                setCustomerBusinessIdFilter(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Filter by Customer ID"
-              className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-            />
-            <input
-              value={contactFilter}
-              onChange={(event) => {
-                setContactFilter(event.target.value);
-                setPage(1);
-              }}
-              placeholder="Filter by Mobile Number"
-              className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-            />
-          </div>
+        <div className="mb-4 grid gap-3 sm:grid-cols-2">
+          <input
+            value={customerBusinessIdFilter}
+            onChange={(event) => {
+              setCustomerBusinessIdFilter(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Filter by Customer ID"
+            className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+          />
+          <input
+            value={contactFilter}
+            onChange={(event) => {
+              setContactFilter(event.target.value);
+              setPage(1);
+            }}
+            placeholder="Filter by Mobile Number"
+            className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+          />
+        </div>
 
-          {prescriptionsQuery.isLoading && <p className="text-sm text-slate-300">Loading prescriptions...</p>}
-          {prescriptionsQuery.isError && <p className="text-sm text-rose-400">{getErrorMessage(prescriptionsQuery.error)}</p>}
+        {prescriptionsQuery.isLoading && <p className="text-sm text-slate-300">Loading prescriptions...</p>}
+        {prescriptionsQuery.isError && <p className="text-sm text-rose-400">{getErrorMessage(prescriptionsQuery.error)}</p>}
 
-          {prescriptionsQuery.data && prescriptionsQuery.data.items.length === 0 && (
-            <p className="rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
-              No prescriptions found.
-            </p>
-          )}
+        {prescriptionsQuery.data && prescriptionsQuery.data.items.length === 0 && (
+          <p className="rounded-lg border border-dashed border-slate-700 p-6 text-center text-sm text-slate-400">
+            No prescriptions found.
+          </p>
+        )}
 
-          {prescriptionsQuery.data && prescriptionsQuery.data.items.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1040px] text-left text-sm">
-                <thead className="border-b border-pink-400/20 text-xs uppercase tracking-wide text-slate-400">
-                  <tr>
-                    <th className="py-3 pr-3">Date</th>
-                    <th className="py-3 pr-3">Customer</th>
-                    <th className="py-3 pr-3">ID</th>
-                    <th className="py-3 pr-3">Contact</th>
-                    <th className="py-3 pr-3">Right</th>
-                    <th className="py-3 pr-3">Left</th>
-                    <th className="py-3 pr-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {prescriptionsQuery.data.items.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-800/80 text-slate-200">
-                      <td className="py-3 pr-3">{new Date(item.prescription_date).toLocaleDateString()}</td>
-                      <td className="py-3 pr-3">{item.customer_name || "-"}</td>
-                      <td className="py-3 pr-3 font-medium text-pink-200">{item.customer_business_id || "-"}</td>
-                      <td className="py-3 pr-3">{item.customer_contact_no || "-"}</td>
-                      <td className="py-3 pr-3">
-                        {item.right_sph ?? "-"}/{item.right_cyl ?? "-"} axis {item.right_axis ?? "-"}
-                      </td>
-                      <td className="py-3 pr-3">
-                        {item.left_sph ?? "-"}/{item.left_cyl ?? "-"} axis {item.left_axis ?? "-"}
-                      </td>
-                      <td className="py-3 pr-3">
-                        <div className="flex flex-wrap gap-2">
-                          {canEditOrDeletePrescriptions && (
-                            <button
-                              type="button"
-                              onClick={() => setEditingPrescription(item)}
-                              className="rounded-md border border-amber-400/30 px-2 py-1 text-xs text-amber-200"
-                            >
-                              Edit
-                            </button>
-                          )}
+        {prescriptionsQuery.data && prescriptionsQuery.data.items.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] text-left text-sm">
+              <thead className="border-b border-pink-400/20 text-xs uppercase tracking-wide text-slate-400">
+                <tr>
+                  <th className="py-3 pr-3">Date</th>
+                  <th className="py-3 pr-3">Customer</th>
+                  <th className="py-3 pr-3">ID</th>
+                  <th className="py-3 pr-3">Contact</th>
+                  <th className="py-3 pr-3">Right</th>
+                  <th className="py-3 pr-3">Left</th>
+                  <th className="py-3 pr-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {prescriptionsQuery.data.items.map((item) => (
+                  <tr key={item.id} className="border-b border-slate-800/80 text-slate-200">
+                    <td className="py-3 pr-3">{new Date(item.prescription_date).toLocaleDateString()}</td>
+                    <td className="py-3 pr-3">{item.customer_name || "-"}</td>
+                    <td className="py-3 pr-3 font-medium text-pink-200">{item.customer_business_id || "-"}</td>
+                    <td className="py-3 pr-3">{item.customer_contact_no || "-"}</td>
+                    <td className="py-3 pr-3">
+                      {item.right_sph ?? "-"}/{item.right_cyl ?? "-"} axis {item.right_axis ?? "-"}
+                    </td>
+                    <td className="py-3 pr-3">
+                      {item.left_sph ?? "-"}/{item.left_cyl ?? "-"} axis {item.left_axis ?? "-"}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setViewPrescription(item)}
+                          className="rounded-md border border-sky-400/35 px-2 py-1 text-xs text-sky-200"
+                        >
+                          View
+                        </button>
+                        {canUpdatePrescriptions && (
                           <button
                             type="button"
-                            onClick={() => generatePdfMutation.mutate(item.id)}
-                            className="rounded-md border border-pink-400/35 px-2 py-1 text-xs text-pink-200"
+                            onClick={() => setEditPrescription(item)}
+                            className="rounded-md border border-amber-400/35 px-2 py-1 text-xs text-amber-200"
                           >
-                            PDF
+                            Update
                           </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => generatePdfMutation.mutate(item.id)}
+                          className="rounded-md border border-pink-400/35 px-2 py-1 text-xs text-pink-200"
+                        >
+                          PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVendorModalPrescription(item);
+                            setSelectedVendorId(0);
+                            setVendorCaption(
+                              `Prescription for ${item.customer_name || "Customer"} (${item.customer_business_id || item.customer_id})`
+                            );
+                          }}
+                          className="rounded-md border border-emerald-400/35 px-2 py-1 text-xs text-emerald-200"
+                        >
+                          Send Vendor
+                        </button>
+                        {canDeletePrescriptions && (
                           <button
                             type="button"
                             onClick={() => {
-                              setVendorModalPrescription(item);
-                              setSelectedVendorId(0);
-                              setVendorCaption(
-                                `Prescription for ${item.customer_name || "Customer"} (${item.customer_business_id || item.customer_id})`
-                              );
+                              if (window.confirm("Delete this prescription?")) {
+                                deleteMutation.mutate(item.id);
+                              }
                             }}
-                            className="rounded-md border border-emerald-400/35 px-2 py-1 text-xs text-emerald-200"
+                            className="rounded-md border border-rose-400/35 px-2 py-1 text-xs text-rose-200"
                           >
-                            Send Vendor
+                            Delete
                           </button>
-                          {canEditOrDeletePrescriptions && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (window.confirm("Delete this prescription?")) {
-                                  deleteMutation.mutate(item.id);
-                                }
-                              }}
-                              className="rounded-md border border-rose-400/35 px-2 py-1 text-xs text-rose-200"
-                            >
-                              Delete
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
-            <span>
-              Page {page} of {totalPages}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
-                className="rounded-md border border-pink-400/20 px-2 py-1 disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages}
-                onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
-                className="rounded-md border border-pink-400/20 px-2 py-1 disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </section>
+        )}
 
-        <section className="order-1 rounded-2xl border border-pink-400/20 bg-matte-850/85 p-5 shadow-neon-ring">
-          <h3 className="text-lg font-semibold text-slate-100">{canEditOrDeletePrescriptions && editingPrescription ? "Edit Prescription" : "Create Prescription"}</h3>
-
-          <div className="mt-3 space-y-2">
-            <input
-              value={customerLookup}
-              onChange={(event) => setCustomerLookup(event.target.value)}
-              placeholder="Search customer by ID or contact"
-              className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-            />
-
-            <select
-              {...register("customer_id")}
-              className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+        <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+          <span>
+            Page {page} of {totalPages}
+          </span>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+              className="rounded-md border border-pink-400/20 px-2 py-1 disabled:opacity-40"
             >
-              <option value={0}>Select customer</option>
-              {(customerLookupQuery.data?.items || []).map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.customer_id} - {customer.name} ({customer.contact_no})
-                </option>
-              ))}
-            </select>
-            {errors.customer_id && <p className="text-xs text-rose-400">{errors.customer_id.message}</p>}
+              Previous
+            </button>
+            <button
+              type="button"
+              disabled={page >= totalPages}
+              onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+              className="rounded-md border border-pink-400/20 px-2 py-1 disabled:opacity-40"
+            >
+              Next
+            </button>
           </div>
+        </div>
+      </section>
 
-          <form className="mt-4 space-y-3" onSubmit={handleSubmit(onSubmit)}>
-            <div>
-              <input
-                type="date"
-                {...register("prescription_date")}
-                className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              {errors.prescription_date && <p className="text-xs text-rose-400">{errors.prescription_date.message}</p>}
+      {viewPrescription && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
+          <div className="w-full max-w-3xl rounded-2xl border border-pink-400/25 bg-matte-900 p-5 shadow-neon-ring">
+            <h3 className="text-lg font-semibold text-slate-100">Prescription Detail</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {viewPrescription.customer_name || "Customer"} ({viewPrescription.customer_business_id || "N/A"})
+            </p>
+
+            <div className="mt-4 grid gap-3 text-sm text-slate-200 sm:grid-cols-2">
+              <p>Date: {new Date(viewPrescription.prescription_date).toLocaleDateString()}</p>
+              <p>Mobile: {viewPrescription.customer_contact_no || "-"}</p>
+              <p>Right Eye: SPH {viewPrescription.right_sph ?? "-"}, CYL {viewPrescription.right_cyl ?? "-"}, Axis {viewPrescription.right_axis ?? "-"}</p>
+              <p>Left Eye: SPH {viewPrescription.left_sph ?? "-"}, CYL {viewPrescription.left_cyl ?? "-"}, Axis {viewPrescription.left_axis ?? "-"}</p>
+              <p>Right VN: {viewPrescription.right_vn || "-"}</p>
+              <p>Left VN: {viewPrescription.left_vn || "-"}</p>
+              <p>PD: {viewPrescription.pd ?? "-"}</p>
+              <p>ADD Power: {viewPrescription.add_power ?? "-"}</p>
+              <p>FH: {viewPrescription.fh || "-"}</p>
+              <p>Notes: {viewPrescription.notes || "-"}</p>
             </div>
 
-            <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Right Eye</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                {...register("right_sph")}
-                placeholder="Right SPH"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("right_cyl")}
-                placeholder="Right CYL"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("right_axis")}
-                placeholder="Right Axis"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("right_vn")}
-                placeholder="Right VN"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-
-            {(errors.right_axis || errors.right_sph || errors.right_cyl) && (
-              <div className="space-y-1 text-xs text-rose-400">
-                {errors.right_axis?.message && <p>{errors.right_axis.message}</p>}
-                {errors.right_sph?.message && <p>{errors.right_sph.message}</p>}
-                {errors.right_cyl?.message && <p>{errors.right_cyl.message}</p>}
-              </div>
-            )}
-
-            <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Left Eye</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                {...register("left_sph")}
-                placeholder="Left SPH"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("left_cyl")}
-                placeholder="Left CYL"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("left_axis")}
-                placeholder="Left Axis"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("left_vn")}
-                placeholder="Left VN"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-
-            {(errors.left_axis || errors.left_sph || errors.left_cyl) && (
-              <div className="space-y-1 text-xs text-rose-400">
-                {errors.left_axis?.message && <p>{errors.left_axis.message}</p>}
-                {errors.left_sph?.message && <p>{errors.left_sph.message}</p>}
-                {errors.left_cyl?.message && <p>{errors.left_cyl.message}</p>}
-              </div>
-            )}
-
-            <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Fitting</p>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <input
-                {...register("pd")}
-                placeholder="PD"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("add_power")}
-                placeholder="ADD Power"
-                className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-              <input
-                {...register("fh")}
-                placeholder="FH"
-                className="col-span-2 rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-              />
-            </div>
-
-            {(errors.pd || errors.add_power || errors.fh) && (
-              <div className="space-y-1 text-xs text-rose-400">
-                {errors.pd?.message && <p>{errors.pd.message}</p>}
-                {errors.add_power?.message && <p>{errors.add_power.message}</p>}
-                {errors.fh?.message && <p>{errors.fh.message}</p>}
-              </div>
-            )}
-
-            <textarea
-              {...register("notes")}
-              rows={3}
-              placeholder="Notes"
-              className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
-            />
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="submit"
-                disabled={createMutation.isPending || updateMutation.isPending}
-                className="rounded-lg border border-pink-300/45 bg-pink-500/15 px-4 py-2 text-sm text-pink-100"
-              >
-                {canEditOrDeletePrescriptions && editingPrescription ? "Update" : "Create"}
-              </button>
-              {canEditOrDeletePrescriptions && editingPrescription && (
+            <div className="mt-4 flex gap-2">
+              {canUpdatePrescriptions && (
                 <button
                   type="button"
                   onClick={() => {
-                    setEditingPrescription(null);
-                    setCustomerLookup("");
+                    setEditPrescription(viewPrescription);
+                    setViewPrescription(null);
                   }}
+                  className="rounded-lg border border-amber-400/35 px-4 py-2 text-sm text-amber-200"
+                >
+                  Update
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setViewPrescription(null)}
+                className="rounded-lg border border-slate-500/50 px-4 py-2 text-sm text-slate-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editPrescription && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/65 p-4">
+          <div className="mx-auto w-full max-w-3xl rounded-2xl border border-pink-400/25 bg-matte-900 p-5 shadow-neon-ring">
+            <h3 className="text-lg font-semibold text-slate-100">Update Prescription</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {editPrescription.customer_name || "Customer"} ({editPrescription.customer_business_id || "N/A"}) -{" "}
+              {editPrescription.customer_contact_no || "-"}
+            </p>
+
+            <form className="mt-4 space-y-3" onSubmit={handleSubmit(onSubmitEdit)}>
+              <div>
+                <input
+                  type="date"
+                  {...register("prescription_date")}
+                  className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                {errors.prescription_date && <p className="text-xs text-rose-400">{errors.prescription_date.message}</p>}
+              </div>
+
+              <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Right Eye</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  {...register("right_sph")}
+                  placeholder="Right SPH"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("right_cyl")}
+                  placeholder="Right CYL"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("right_axis")}
+                  placeholder="Right Axis"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("right_vn")}
+                  placeholder="Right VN"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+
+              <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Left Eye</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  {...register("left_sph")}
+                  placeholder="Left SPH"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("left_cyl")}
+                  placeholder="Left CYL"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("left_axis")}
+                  placeholder="Left Axis"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("left_vn")}
+                  placeholder="Left VN"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+
+              <p className="pt-1 text-xs uppercase tracking-wide text-slate-400">Fitting</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input
+                  {...register("pd")}
+                  placeholder="PD"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("add_power")}
+                  placeholder="ADD Power"
+                  className="rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+                <input
+                  {...register("fh")}
+                  placeholder="FH"
+                  className="sm:col-span-2 rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+                />
+              </div>
+
+              <textarea
+                {...register("notes")}
+                rows={3}
+                placeholder="Notes"
+                className="w-full rounded-lg border border-pink-400/25 bg-matte-800 px-3 py-2 text-sm text-slate-100"
+              />
+
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="submit"
+                  disabled={updateMutation.isPending}
+                  className="rounded-lg border border-pink-300/45 bg-pink-500/15 px-4 py-2 text-sm text-pink-100"
+                >
+                  {updateMutation.isPending ? "Saving..." : "Save Update"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditPrescription(null)}
                   className="rounded-lg border border-slate-500/50 px-4 py-2 text-sm text-slate-200"
                 >
                   Cancel
                 </button>
-              )}
-            </div>
-          </form>
-        </section>
-      </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {vendorModalPrescription && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 p-4">
@@ -624,9 +594,7 @@ export function PrescriptionsRecordsPage() {
               </select>
 
               {activeVendorsQuery.isLoading && <p className="text-xs text-slate-400">Loading vendors...</p>}
-              {activeVendorsQuery.isError && (
-                <p className="text-xs text-rose-400">{getErrorMessage(activeVendorsQuery.error)}</p>
-              )}
+              {activeVendorsQuery.isError && <p className="text-xs text-rose-400">{getErrorMessage(activeVendorsQuery.error)}</p>}
 
               <textarea
                 value={vendorCaption}

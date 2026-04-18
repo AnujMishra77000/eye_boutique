@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash
+from app.core.shops import DEFAULT_SHOP_KEY
 from app.db.session import SessionLocal
 from app.models.enums import UserRole
 from app.repositories.user_repository import UserRepository
@@ -17,6 +18,7 @@ def seed_users(db: Session) -> None:
             full_name="Aadarsh Admin",
             password_hash=get_password_hash("Admin@12345"),
             role=UserRole.ADMIN,
+            shop_key=DEFAULT_SHOP_KEY,
         )
 
     if not user_repo.get_by_email("staff@aadarsh-eye.com"):
@@ -25,6 +27,7 @@ def seed_users(db: Session) -> None:
             full_name="Aadarsh Staff",
             password_hash=get_password_hash("Staff@12345"),
             role=UserRole.STAFF,
+            shop_key=DEFAULT_SHOP_KEY,
         )
 
 

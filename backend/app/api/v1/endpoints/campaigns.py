@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import get_shop_key, require_roles
 from app.db.session import get_db
 from app.models.enums import CampaignStatus, UserRole
 from app.models.user import User
@@ -22,10 +22,11 @@ def list_campaigns(
     status: CampaignStatus | None = Query(default=None),
     search: str | None = Query(default=None),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> CampaignListResponse:
     _ = current_user
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.list_campaigns(page=page, page_size=page_size, status=status, search=search)
 
 
@@ -33,9 +34,10 @@ def list_campaigns(
 def create_campaign(
     payload: CampaignCreate,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> CampaignRead:
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.create_campaign(payload=payload, actor=current_user)
 
 
@@ -43,10 +45,11 @@ def create_campaign(
 def get_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> CampaignRead:
     _ = current_user
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.get_campaign(campaign_id=campaign_id)
 
 
@@ -55,9 +58,10 @@ def update_campaign(
     campaign_id: int,
     payload: CampaignUpdate,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> CampaignRead:
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.update_campaign(campaign_id=campaign_id, payload=payload, actor=current_user)
 
 
@@ -65,9 +69,10 @@ def update_campaign(
 def delete_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> MessageResponse:
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     service.delete_campaign(campaign_id=campaign_id, actor=current_user)
     return MessageResponse(message="Campaign deleted successfully")
 
@@ -76,9 +81,10 @@ def delete_campaign(
 def schedule_campaign(
     campaign_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> CampaignScheduleResponse:
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.schedule_campaign(campaign_id=campaign_id, actor=current_user)
 
 
@@ -88,8 +94,9 @@ def campaign_logs(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> CampaignLogListResponse:
     _ = current_user
-    service = CampaignService(db)
+    service = CampaignService(db, shop_key=shop_key)
     return service.list_logs(campaign_id=campaign_id, page=page, page_size=page_size)

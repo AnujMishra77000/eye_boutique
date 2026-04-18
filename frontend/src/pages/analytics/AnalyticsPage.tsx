@@ -6,6 +6,8 @@ import { getRevenueSummary, getRevenueTimeseries } from "@/features/analytics/ap
 import { getErrorMessage } from "@/lib/errors";
 import type { RevenueRange } from "@/types/analytics";
 
+const GRAPH_PURPLE = "#6b2fa3";
+
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -74,15 +76,21 @@ export function AnalyticsPage() {
             <div className="grid gap-2 text-xs text-slate-200 sm:grid-cols-3">
               <div className="rounded-md border border-pink-400/20 bg-matte-800/60 px-3 py-2">
                 <p className="text-slate-400">Total Revenue</p>
-                <p className="text-sm font-semibold text-pink-200">{formatCurrency(summaryQuery.data.total_revenue)}</p>
+                <p className="text-sm font-semibold" style={{ color: GRAPH_PURPLE }}>
+                  {formatCurrency(summaryQuery.data.total_revenue)}
+                </p>
               </div>
               <div className="rounded-md border border-pink-400/20 bg-matte-800/60 px-3 py-2">
                 <p className="text-slate-400">Total Bills</p>
-                <p className="text-sm font-semibold text-pink-200">{summaryQuery.data.total_bills}</p>
+                <p className="text-sm font-semibold" style={{ color: GRAPH_PURPLE }}>
+                  {summaryQuery.data.total_bills}
+                </p>
               </div>
               <div className="rounded-md border border-pink-400/20 bg-matte-800/60 px-3 py-2">
                 <p className="text-slate-400">Average Bill Value</p>
-                <p className="text-sm font-semibold text-pink-200">{formatCurrency(summaryQuery.data.average_bill_value)}</p>
+                <p className="text-sm font-semibold" style={{ color: GRAPH_PURPLE }}>
+                  {formatCurrency(summaryQuery.data.average_bill_value)}
+                </p>
               </div>
             </div>
           )}
@@ -96,28 +104,32 @@ export function AnalyticsPage() {
             <AreaChart data={timeseriesQuery.data?.points ?? []}>
               <defs>
                 <linearGradient id="analyticsRevenueGradient" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#1ea9ff" stopOpacity={0.62} />
-                  <stop offset="100%" stopColor="#1ea9ff" stopOpacity={0.04} />
+                  <stop offset="0%" stopColor={GRAPH_PURPLE} stopOpacity={0.62} />
+                  <stop offset="100%" stopColor={GRAPH_PURPLE} stopOpacity={0.07} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="4 4" stroke="#1f2b3d" />
-              <XAxis dataKey="label" stroke="#96a2b8" />
-              <YAxis stroke="#96a2b8" />
+              <CartesianGrid strokeDasharray="4 4" stroke="rgba(107, 47, 163, 0.24)" />
+              <XAxis dataKey="label" stroke={GRAPH_PURPLE} />
+              <YAxis stroke={GRAPH_PURPLE} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#121821",
-                  border: "1px solid rgba(30, 169, 255, 0.35)",
+                  backgroundColor: "#ffeaf6",
+                  border: "1px solid rgba(107, 47, 163, 0.45)",
                   borderRadius: 12,
-                  color: "#e2e8f0"
+                  color: GRAPH_PURPLE
                 }}
+                itemStyle={{ color: GRAPH_PURPLE }}
+                labelStyle={{ color: GRAPH_PURPLE }}
                 formatter={(value) => formatCurrency(Number(value))}
               />
               <Area
                 type="monotone"
                 dataKey="value"
-                stroke="#56beff"
+                stroke={GRAPH_PURPLE}
                 strokeWidth={2}
                 fill="url(#analyticsRevenueGradient)"
+                dot={{ r: 2, fill: GRAPH_PURPLE, stroke: GRAPH_PURPLE }}
+                activeDot={{ r: 4, fill: GRAPH_PURPLE, stroke: GRAPH_PURPLE }}
               />
             </AreaChart>
           </ResponsiveContainer>

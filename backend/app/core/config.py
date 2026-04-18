@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     backend_public_url: str = Field(default="http://localhost:8000", alias="BACKEND_PUBLIC_URL")
     media_root: str = Field(default="storage", alias="MEDIA_ROOT")
     media_url_prefix: str = Field(default="/media", alias="MEDIA_URL_PREFIX")
+    chat_storage_root: str = Field(default="private_storage/chat", alias="CHAT_STORAGE_ROOT")
+    chat_max_file_size_mb: int = Field(default=12, alias="CHAT_MAX_FILE_SIZE_MB")
+    chat_redis_channel: str = Field(default="eye_boutique:shared_chat", alias="CHAT_REDIS_CHANNEL")
 
     # SMTP / Gmail settings for automatic customer welcome email
     customer_welcome_email_enabled: bool = Field(default=False, alias="CUSTOMER_WELCOME_EMAIL_ENABLED")
@@ -135,6 +138,13 @@ class Settings(BaseSettings):
     @property
     def prescription_media_dir(self) -> Path:
         return self.media_root_path / "prescriptions"
+
+    @property
+    def chat_storage_root_path(self) -> Path:
+        root = Path(self.chat_storage_root)
+        if root.is_absolute():
+            return root
+        return self.backend_root_dir / root
 
 
 @lru_cache

@@ -35,30 +35,35 @@ body {
 @layer base {
   button {
     @apply transition-all duration-300 ease-out;
+    background-color: rgba(255, 236, 246, 0.96) !important;
+    color: #3b145f !important;
+    border-color: rgba(125, 66, 176, 0.62) !important;
   }
 
   button:not(:disabled):hover {
     @apply -translate-y-0.5;
-    filter: saturate(1.15) brightness(1.08);
+    background-color: rgba(255, 223, 238, 0.98) !important;
+    color: #2e0f4e !important;
+    filter: saturate(1.08) brightness(1.02);
   }
 
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]),
   select {
     min-height: 2.75rem;
-    border: 1px solid rgba(255, 233, 244, 0.58);
+    border: 1px solid rgba(171, 99, 202, 0.55) !important;
     border-radius: 0.5rem;
-    background-color: rgba(255, 236, 245, 0.14);
-    color: #fff5fb;
+    background-color: rgba(255, 228, 242, 0.94) !important;
+    color: #111111 !important;
     padding-left: 0.75rem;
     padding-right: 0.75rem;
     transition: border-color 220ms ease, box-shadow 220ms ease, background-color 220ms ease;
   }
 
   textarea {
-    border: 1px solid rgba(255, 233, 244, 0.58);
+    border: 1px solid rgba(171, 99, 202, 0.55) !important;
     border-radius: 0.5rem;
-    background-color: rgba(255, 236, 245, 0.14);
-    color: #fff5fb;
+    background-color: rgba(255, 228, 242, 0.94) !important;
+    color: #111111 !important;
     padding: 0.5rem 0.75rem;
     transition: border-color 220ms ease, box-shadow 220ms ease, background-color 220ms ease;
   }
@@ -66,21 +71,55 @@ body {
   input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):focus,
   select:focus,
   textarea:focus {
-    border-color: rgba(255, 228, 241, 0.9);
-    box-shadow: 0 0 0 2px rgba(255, 211, 234, 0.28);
+    border-color: rgba(142, 59, 188, 0.92) !important;
+    box-shadow: 0 0 0 2px rgba(183, 124, 214, 0.28);
     outline: none;
-    background-color: rgba(255, 230, 242, 0.20);
+    background-color: rgba(255, 214, 235, 0.99) !important;
+    color: #050505 !important;
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: rgba(255, 235, 245, 0.78);
+    color: rgba(61, 27, 76, 0.66);
+  }
+}
+
+@layer components {
+  .shadow-neon-ring,
+  .shadow-neon-glow {
+    background-color: rgba(255, 238, 248, 0.94) !important;
+    border-color: rgba(126, 67, 177, 0.45) !important;
+    color: #3b145f !important;
+  }
+
+  .shadow-neon-ring .text-slate-50,
+  .shadow-neon-ring .text-slate-100,
+  .shadow-neon-ring .text-slate-200,
+  .shadow-neon-ring .text-pink-50,
+  .shadow-neon-ring .text-pink-100,
+  .shadow-neon-ring .text-pink-200,
+  .shadow-neon-glow .text-slate-50,
+  .shadow-neon-glow .text-slate-100,
+  .shadow-neon-glow .text-slate-200,
+  .shadow-neon-glow .text-pink-50,
+  .shadow-neon-glow .text-pink-100,
+  .shadow-neon-glow .text-pink-200 {
+    color: #3b145f !important;
+  }
+
+  .shadow-neon-ring .text-slate-300,
+  .shadow-neon-ring .text-slate-400,
+  .shadow-neon-ring .text-slate-500,
+  .shadow-neon-glow .text-slate-300,
+  .shadow-neon-glow .text-slate-400,
+  .shadow-neon-glow .text-slate-500 {
+    color: #5b2f84 !important;
   }
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #ffd8ea #132a58;
+  scrollbar-color: #ffbfdc #57136f;
 }
 
 ::-webkit-scrollbar {
@@ -89,14 +128,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #132a58;
+  background: #57136f;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #ffd8ea;
+  background: #ffbfdc;
   border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #fff1f7;
+  background: #ffd5e8;
 }

@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import get_shop_key, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -21,10 +21,11 @@ def list_bills(
     search: str | None = Query(default=None),
     customer_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> BillListResponse:
     _ = current_user
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     return service.list_bills(page=page, page_size=page_size, search=search, customer_pk=customer_id)
 
 
@@ -32,9 +33,10 @@ def list_bills(
 def create_bill(
     payload: BillCreate,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> BillRead:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     return service.create_bill(payload=payload, actor=current_user)
 
 
@@ -42,10 +44,11 @@ def create_bill(
 def get_bill(
     bill_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> BillRead:
     _ = current_user
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     return service.get_bill(bill_id=bill_id)
 
 
@@ -54,9 +57,10 @@ def update_bill(
     bill_id: int,
     payload: BillUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_roles(UserRole.ADMIN)),
+    shop_key: str = Depends(get_shop_key),
+    current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> BillRead:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     return service.update_bill(bill_id=bill_id, payload=payload, actor=current_user)
 
 
@@ -64,9 +68,10 @@ def update_bill(
 def delete_bill(
     bill_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> MessageResponse:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     service.delete_bill(bill_id=bill_id, actor=current_user)
     return MessageResponse(message="Bill deleted successfully")
 
@@ -75,9 +80,10 @@ def delete_bill(
 def generate_bill_pdf(
     bill_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> BillRead:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     return service.generate_pdf(bill_id=bill_id, actor=current_user)
 
 
@@ -85,9 +91,10 @@ def generate_bill_pdf(
 def send_bill_email(
     bill_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> MessageResponse:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     message = service.send_email(bill_id=bill_id, actor=current_user)
     return MessageResponse(message=message)
 
@@ -96,8 +103,9 @@ def send_bill_email(
 def send_bill_whatsapp(
     bill_id: int,
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> MessageResponse:
-    service = BillService(db)
+    service = BillService(db, shop_key=shop_key)
     message = service.send_whatsapp(bill_id=bill_id, actor=current_user)
     return MessageResponse(message=message)

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.exceptions import AppException
+from app.core.shops import get_shop_name
 from app.models.bill import Bill
 from app.models.customer import Customer
 from app.models.enums import PaymentStatus, WhatsAppModuleType, WhatsAppStatus
@@ -29,8 +30,9 @@ MONEY_QUANTIZER = Decimal("0.01")
 
 
 class BillService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, shop_key: str):
         self.db = db
+        self.shop_key = shop_key
         self.repo = BillRepository(db)
         self.customer_repo = CustomerRepository(db)
         self.audit_service = AuditService(db)
@@ -113,7 +115,7 @@ class BillService:
 
     def _generate_bill_number(self) -> str:
         today = datetime.now(UTC).date()
-        existing_count = self.repo.count_created_for_day(today)
+        existing_count = self.repo.count_created_for_day(today, shop_key=self.shop_key)
 
         for offset in range(1, 500):
             sequence = existing_count + offset
@@ -175,7 +177,7 @@ class BillService:
         media_id = self.whatsapp_service.upload_media(pdf_file)
 
         caption = (
-            f"Invoice {bill.bill_number} from Aadarsh Eye Boutique Care Centre. "
+            f"Invoice {bill.bill_number} from {get_shop_name(self.shop_key)}. "
             f"Final: INR {self._format_money(bill.final_price)}, "
             f"Balance: INR {self._format_money(bill.balance_amount)}"
         )
@@ -318,7 +320,13 @@ class BillService:
             logger.warning("bill.auto_email_send_failed_unknown", bill_id=bill.id, error=str(exc))
 
     def list_bills(self, page: int, page_size: int, search: str | None, customer_pk: int | None) -> BillListResponse:
-        items, total = self.repo.list(page=page, page_size=page_size, search=search, customer_pk=customer_pk)
+        items, total = self.repo.list(
+            page=page,
+            page_size=page_size,
+            shop_key=self.shop_key,
+            search=search,
+            customer_pk=customer_pk,
+        )
         return BillListResponse(
             items=[self._serialize(item) for item in items],
             total=total,
@@ -327,13 +335,13 @@ class BillService:
         )
 
     def get_bill(self, bill_id: int) -> BillRead:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
         return self._serialize(bill)
 
     def create_bill(self, payload: BillCreate, actor: User) -> BillRead:
-        customer = self.customer_repo.get_by_id(payload.customer_id)
+        customer = self.customer_repo.get_by_id(payload.customer_id, shop_key=self.shop_key)
         if not customer:
             raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
 
@@ -398,7 +406,7 @@ class BillService:
 
         self._try_auto_generate_pdf(bill=bill, actor=actor, action="bill.generate_pdf.auto")
 
-        persisted_bill = self.repo.get_by_id(bill.id)
+        persisted_bill = self.repo.get_by_id(bill.id, shop_key=self.shop_key)
         if persisted_bill and persisted_bill.pdf_url:
             if self._is_customer_email_eligible(customer):
                 self._try_auto_send_email(bill=persisted_bill, customer=customer, actor=actor)
@@ -409,7 +417,7 @@ class BillService:
         return self.get_bill(bill.id)
 
     def update_bill(self, bill_id: int, payload: BillUpdate, actor: User) -> BillRead:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -429,7 +437,7 @@ class BillService:
         update_data = payload.model_dump(exclude_unset=True)
 
         if payload.customer_id is not None and payload.customer_id != bill.customer_id:
-            customer = self.customer_repo.get_by_id(payload.customer_id)
+            customer = self.customer_repo.get_by_id(payload.customer_id, shop_key=self.shop_key)
             if not customer:
                 raise AppException(status_code=404, code="customer_not_found", message="Customer not found")
             bill.customer_id = customer.id
@@ -491,7 +499,7 @@ class BillService:
         return self.get_bill(bill.id)
 
     def delete_bill(self, bill_id: int, actor: User) -> None:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -513,7 +521,7 @@ class BillService:
         self.db.commit()
 
     def generate_pdf(self, bill_id: int, actor: User) -> BillRead:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -543,7 +551,7 @@ class BillService:
         return self._serialize(bill)
 
     def send_email(self, bill_id: int, actor: User) -> str:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -560,7 +568,7 @@ class BillService:
 
         if not bill.pdf_url:
             self.generate_pdf(bill_id=bill.id, actor=actor)
-            bill = self.repo.get_by_id(bill.id)
+            bill = self.repo.get_by_id(bill.id, shop_key=self.shop_key)
             if not bill:
                 raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -581,7 +589,7 @@ class BillService:
         return "Bill sent to customer email successfully"
 
     def send_whatsapp(self, bill_id: int, actor: User) -> str:
-        bill = self.repo.get_by_id(bill_id)
+        bill = self.repo.get_by_id(bill_id, shop_key=self.shop_key)
         if not bill:
             raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 
@@ -598,7 +606,7 @@ class BillService:
 
         if not bill.pdf_url:
             self.generate_pdf(bill_id=bill.id, actor=actor)
-            bill = self.repo.get_by_id(bill.id)
+            bill = self.repo.get_by_id(bill.id, shop_key=self.shop_key)
             if not bill:
                 raise AppException(status_code=404, code="bill_not_found", message="Bill not found")
 

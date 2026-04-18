@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import Boolean, Enum, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core.shops import DEFAULT_SHOP_KEY
 from app.db.base_class import Base
 from app.models.enums import Gender
 from app.models.mixins import SoftDeleteMixin, TimestampMixin, UserTrackingMixin
@@ -12,6 +13,7 @@ class Customer(Base, TimestampMixin, UserTrackingMixin, SoftDeleteMixin):
     __tablename__ = "customers"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    shop_key: Mapped[str] = mapped_column(String(64), nullable=False, default=DEFAULT_SHOP_KEY, index=True)
     customer_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     age: Mapped[int | None] = mapped_column(Integer, nullable=True)

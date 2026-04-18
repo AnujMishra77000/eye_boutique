@@ -1,5 +1,6 @@
 import { LogOut } from "lucide-react";
 
+import { useActiveShop } from "@/features/shops/useActiveShop";
 import { useAuth } from "@/hooks/useAuth";
 import type { UserProfile } from "@/types/auth";
 
@@ -26,13 +27,15 @@ function getDisplayName(user?: UserProfile): string {
 
 export function Header({ user }: HeaderProps) {
   const { logout } = useAuth();
+  const activeShop = useActiveShop();
   const displayName = getDisplayName(user);
+  const shopName = activeShop?.name ?? "Aadarsh Eye Boutique Center";
 
   return (
     <header className="sticky top-0 z-20 border-b border-pink-300/20 bg-matte-900/65 backdrop-blur">
       <div className="mx-auto flex w-full items-center justify-between gap-3 px-3 py-3 sm:px-5 lg:px-7">
         <div className="min-w-0">
-          <h1 className="truncate text-sm font-semibold text-slate-100 sm:text-base lg:text-lg">Aadarsh Eye Boutique Care Centre</h1>
+          <h1 className="truncate text-sm font-semibold text-slate-100 sm:text-base lg:text-lg">{shopName}</h1>
           <p className="truncate text-[11px] text-slate-300 sm:text-xs">
             {user
               ? `${user.role === "admin" ? "Admin" : "Staff"} Access • ${displayName}`

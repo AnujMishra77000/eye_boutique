@@ -5,7 +5,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_roles
+from app.api.deps import get_shop_key, require_roles
 from app.db.session import get_db
 from app.models.enums import UserRole
 from app.models.user import User
@@ -20,10 +20,11 @@ RangeKey = Literal["today", "last_7_days", "last_30_days"]
 @router.get("/dashboard", response_model=DashboardSummaryResponse)
 def dashboard_summary(
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN, UserRole.STAFF)),
 ) -> DashboardSummaryResponse:
     _ = current_user
-    service = AnalyticsService(db)
+    service = AnalyticsService(db, shop_key=shop_key)
     return service.get_dashboard_summary(include_revenue=current_user.role == UserRole.ADMIN)
 
 
@@ -31,10 +32,11 @@ def dashboard_summary(
 def revenue_summary(
     range_key: RangeKey = Query(default="last_7_days", alias="range"),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> RevenueSummaryResponse:
     _ = current_user
-    service = AnalyticsService(db)
+    service = AnalyticsService(db, shop_key=shop_key)
     return service.get_revenue_summary(range_key=range_key)
 
 
@@ -42,8 +44,9 @@ def revenue_summary(
 def revenue_timeseries(
     range_key: RangeKey = Query(default="last_7_days", alias="range"),
     db: Session = Depends(get_db),
+    shop_key: str = Depends(get_shop_key),
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
 ) -> RevenueTimeseriesResponse:
     _ = current_user
-    service = AnalyticsService(db)
+    service = AnalyticsService(db, shop_key=shop_key)
     return service.get_revenue_timeseries(range_key=range_key)

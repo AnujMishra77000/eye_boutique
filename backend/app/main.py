@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -8,14 +10,28 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import configure_logging
+from app.services.chat_realtime_gateway import ChatRealtimeGateway
 
 configure_logging()
+
+
+@asynccontextmanager
+async def app_lifespan(app: FastAPI):
+    chat_gateway = ChatRealtimeGateway(redis_url=settings.redis_url, channel=settings.chat_redis_channel)
+    app.state.chat_gateway = chat_gateway
+    await chat_gateway.start()
+    try:
+        yield
+    finally:
+        await chat_gateway.stop()
+
 
 app = FastAPI(
     title=settings.project_name,
     version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=app_lifespan,
 )
 
 app.add_middleware(

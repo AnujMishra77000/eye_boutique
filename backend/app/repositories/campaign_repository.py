@@ -16,10 +16,11 @@ class CampaignRepository:
         self,
         page: int,
         page_size: int,
+        shop_key: str,
         status: CampaignStatus | None = None,
         search: str | None = None,
     ) -> tuple[list[Campaign], int]:
-        query = self.db.query(Campaign).filter(Campaign.is_deleted.is_(False))
+        query = self.db.query(Campaign).filter(Campaign.is_deleted.is_(False), Campaign.shop_key == shop_key)
 
         if status is not None:
             query = query.filter(Campaign.status == status)
@@ -37,10 +38,12 @@ class CampaignRepository:
         )
         return items, total
 
-    def get_by_id(self, campaign_id: int, include_deleted: bool = False) -> Campaign | None:
+    def get_by_id(self, campaign_id: int, shop_key: str | None = None, include_deleted: bool = False) -> Campaign | None:
         query = self.db.query(Campaign)
         if not include_deleted:
             query = query.filter(Campaign.is_deleted.is_(False))
+        if shop_key is not None:
+            query = query.filter(Campaign.shop_key == shop_key)
         return query.filter(Campaign.id == campaign_id).first()
 
     def list_due_scheduled(self, now: datetime, limit: int = 100) -> list[Campaign]:

@@ -1,6 +1,7 @@
 import axios, { AxiosError, AxiosHeaders, type InternalAxiosRequestConfig } from "axios";
 
 import { getAccessToken, getActiveAuthRole, getRefreshToken, setAuthTokens } from "@/features/auth/store";
+import { getActiveShopKey } from "@/features/shops/store";
 import type { TokenPair } from "@/types/auth";
 
 type RetryRequestConfig = InternalAxiosRequestConfig & {
@@ -29,10 +30,18 @@ function queueRefreshSubscriber(callback: (token: string | null) => void) {
 apiClient.interceptors.request.use((config) => {
   const activeRole = getActiveAuthRole();
   const token = getAccessToken(activeRole ?? undefined);
+  const activeShopKey = getActiveShopKey();
+
+  if (token || activeShopKey) {
+    config.headers = config.headers ?? new AxiosHeaders();
+  }
 
   if (token) {
-    config.headers = config.headers ?? new AxiosHeaders();
     config.headers.Authorization = "Bearer " + token;
+  }
+
+  if (activeShopKey) {
+    config.headers["X-Shop-Key"] = activeShopKey;
   }
 
   return config;
@@ -85,13 +94,19 @@ apiClient.interceptors.response.use(
     isRefreshing = true;
 
     try {
+      const activeShopKey = getActiveShopKey();
       const refreshResponse = await axios.post<TokenPair>(
         resolvedBaseUrl + "/auth/refresh",
         {
           refresh_token: refreshToken
         },
         {
-          timeout: 15_000
+          timeout: 15_000,
+          headers: activeShopKey
+            ? {
+                "X-Shop-Key": activeShopKey
+              }
+            : undefined
         }
       );
 
